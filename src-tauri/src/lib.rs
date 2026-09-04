@@ -60,10 +60,20 @@ pub fn run() {
         .setup(move |app| {
             let app_handle = app.handle().clone();
 
-            // Progress callback for download manager -> emits to frontend
+            // Progress callback for download manager -> throttled to avoid IPC saturation
             let app_handle_dl = app_handle.clone();
+            let last_emit_ms = Arc::new(std::sync::atomic::AtomicU64::new(0));
             let dl_progress_cb = Arc::new(move |progress: crate::domain::entities::DownloadProgress| {
-                let _ = app_handle_dl.emit("download-progress", &progress);
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+
+                let last = last_emit_ms.load(std::sync::atomic::Ordering::Relaxed);
+                if progress.percentage >= 100.0 || now_ms.saturating_sub(last) >= 80 {
+                    last_emit_ms.store(now_ms, std::sync::atomic::Ordering::Relaxed);
+                    let _ = app_handle_dl.emit("download-progress", &progress);
+                }
             });
 
             let download_manager = Arc::new(DownloadManager::new(8, Some(dl_progress_cb)));

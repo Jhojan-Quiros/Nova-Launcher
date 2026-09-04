@@ -94,9 +94,8 @@ export const DownloadsPage: React.FC = () => {
                   <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                   <span className="truncate max-w-sm">{item.file}</span>
                 </div>
-                <div className="flex items-center gap-4 shrink-0 text-slate-400">
-                  <span>{formatBytes(item.totalBytes)}</span>
-                  <span className="font-mono text-emerald-400">100%</span>
+                <div className="flex items-center gap-2 shrink-0 text-slate-400">
+                  <span className="font-mono text-xs text-emerald-400">Verified</span>
                 </div>
               </div>
             ))

@@ -26,6 +26,9 @@ impl DownloadManager {
         Self {
             client: Client::builder()
                 .user_agent("NovaLauncher/1.0")
+                .connect_timeout(std::time::Duration::from_secs(10))
+                .tcp_keepalive(std::time::Duration::from_secs(15))
+                .pool_idle_timeout(std::time::Duration::from_secs(90))
                 .build()
                 .unwrap_or_default(),
             max_concurrent,
@@ -62,6 +65,18 @@ impl DownloadManager {
         })?;
 
         let tmp_path = item.destination.with_extension("tmp_download");
+        let raw_filename = item
+            .destination
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        let display_name = if raw_filename.len() == 40 && raw_filename.chars().all(|c| c.is_ascii_hexdigit()) {
+            format!("Asset {}", &raw_filename[..8])
+        } else {
+            raw_filename
+        };
 
         // Retry loop
         let mut attempts = 0;
@@ -71,6 +86,7 @@ impl DownloadManager {
                 &client,
                 &item.url,
                 &tmp_path,
+                &display_name,
                 &instance_id,
                 total_bytes,
                 downloaded_so_far.clone(),
@@ -112,6 +128,7 @@ impl DownloadManager {
         client: &Client,
         url: &str,
         dest: &Path,
+        display_name: &str,
         instance_id: &Option<String>,
         total_bytes: u64,
         downloaded_so_far: Arc<AtomicU64>,
@@ -131,19 +148,23 @@ impl DownloadManager {
         })?;
 
         let mut stream = response.bytes_stream();
-        let file_name = dest.file_name().unwrap_or_default().to_string_lossy().to_string();
 
-        while let Some(chunk_result) = stream.next().await {
-            let chunk = chunk_result.map_err(|e| {
-                LauncherError::network(format!("Stream error reading {}: {}", url, e))
-            })?;
+        loop {
+            let chunk_opt = match tokio::time::timeout(
+                std::time::Duration::from_secs(20),
+                stream.next(),
+            ).await {
+                Ok(Some(res)) => res.map_err(|e| LauncherError::network(format!("Stream error reading {}: {}", url, e)))?,
+                Ok(None) => break,
+                Err(_) => return Err(LauncherError::network(format!("Connection timed out reading chunks for {}", url))),
+            };
 
-            file.write_all(&chunk).map_err(|e| {
+            file.write_all(&chunk_opt).map_err(|e| {
                 LauncherError::filesystem(format!("Failed to write chunk: {}", e))
             })?;
 
-            let prev = downloaded_so_far.fetch_add(chunk.len() as u64, Ordering::Relaxed);
-            let current = prev + chunk.len() as u64;
+            let prev = downloaded_so_far.fetch_add(chunk_opt.len() as u64, Ordering::Relaxed);
+            let current = prev + chunk_opt.len() as u64;
 
             if let Some(cb) = &progress_cb {
                 let elapsed = start_time.elapsed().as_secs_f64();
@@ -156,7 +177,7 @@ impl DownloadManager {
 
                 cb(DownloadProgress {
                     instance_id: instance_id.clone(),
-                    file: file_name.clone(),
+                    file: display_name.to_string(),
                     downloaded_bytes: current,
                     total_bytes,
                     percentage,

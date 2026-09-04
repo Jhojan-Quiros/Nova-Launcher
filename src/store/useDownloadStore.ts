@@ -26,15 +26,35 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
   updateProgress: (progress) =>
     set((state) => {
       const isComplete = progress.percentage >= 100;
+
+      let newHistory = state.history;
+      if (
+        state.currentFile &&
+        state.currentFile !== progress.file &&
+        !state.history.some((h) => h.file === state.currentFile)
+      ) {
+        newHistory = [
+          {
+            instanceId: state.currentInstanceId,
+            file: state.currentFile,
+            downloadedBytes: progress.downloadedBytes,
+            totalBytes: progress.totalBytes,
+            percentage: 100,
+            speedBytesPerSec: progress.speedBytesPerSec,
+          },
+          ...state.history.slice(0, 19),
+        ];
+      }
+
       return {
         isDownloading: !isComplete,
-        currentFile: progress.file,
+        currentFile: isComplete ? "" : progress.file,
         currentInstanceId: progress.instanceId,
         downloadedBytes: progress.downloadedBytes,
         totalBytes: progress.totalBytes,
         percentage: progress.percentage,
         speed: progress.speedBytesPerSec,
-        history: [progress, ...state.history.slice(0, 19)],
+        history: newHistory,
       };
     }),
   resetProgress: () =>
