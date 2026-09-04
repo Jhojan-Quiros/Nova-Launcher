@@ -71,6 +71,18 @@ impl ArgumentBuilder {
         jvm_args.push(format!("-Xms{}M", instance.ram.min_mb));
         jvm_args.push(format!("-Xmx{}M", instance.ram.max_mb));
 
+        // Modern JVM flags (Java 17/21/25) to suppress restricted native access warnings
+        let is_modern_java = version_json
+            .pointer("/javaVersion/majorVersion")
+            .and_then(|v| v.as_i64())
+            .map(|m| m >= 17)
+            .unwrap_or(true);
+
+        if is_modern_java {
+            jvm_args.push("-XX:+IgnoreUnrecognizedVMOptions".to_string());
+            jvm_args.push("--enable-native-access=ALL-UNNAMED".to_string());
+        }
+
         if let Some(jvm_array) = version_json.pointer("/arguments/jvm").and_then(|j| j.as_array()) {
             for arg_entry in jvm_array {
                 Self::process_arg_entry(arg_entry, &mut jvm_args, &placeholders, env);

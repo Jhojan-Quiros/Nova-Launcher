@@ -3,19 +3,17 @@ use nova_launcher_lib::infrastructure::minecraft::rule_evaluator::{ArgumentRuleE
 
 #[test]
 fn test_rule_evaluator() {
-    let win_env = PlatformEnvironment {
-        os_name: "windows".to_string(),
-        arch: "x86_64".to_string(),
-        is_demo_user: false,
-        has_custom_resolution: false,
-    };
+    let mut win_env = PlatformEnvironment::current();
+    win_env.os_name = "windows".to_string();
+    win_env.arch = "x86_64".to_string();
+    win_env.is_demo_user = false;
+    win_env.has_custom_resolution = false;
 
-    let osx_env = PlatformEnvironment {
-        os_name: "osx".to_string(),
-        arch: "x86_64".to_string(),
-        is_demo_user: false,
-        has_custom_resolution: false,
-    };
+    let mut osx_env = PlatformEnvironment::current();
+    osx_env.os_name = "osx".to_string();
+    osx_env.arch = "x86_64".to_string();
+    osx_env.is_demo_user = false;
+    osx_env.has_custom_resolution = false;
 
     // 1. No rules -> allowed
     assert!(ArgumentRuleEvaluator::is_allowed(None, &win_env));
@@ -54,4 +52,13 @@ fn test_rule_evaluator() {
     let mut demo_env = win_env.clone();
     demo_env.is_demo_user = true;
     assert!(ArgumentRuleEvaluator::is_allowed(Some(&demo_rules), &demo_env));
+
+    // 5. Quick play feature rules - must be rejected when not enabled
+    let qp_rules = vec![
+        json!({
+            "action": "allow",
+            "features": { "is_quick_play_singleplayer": true }
+        })
+    ];
+    assert!(!ArgumentRuleEvaluator::is_allowed(Some(&qp_rules), &win_env));
 }

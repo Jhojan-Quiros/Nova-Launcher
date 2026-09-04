@@ -25,12 +25,11 @@ fn test_build_modern_arguments() {
     let version_dir = paths.versions_dir().join("1.21.1");
     std::fs::create_dir_all(&version_dir).unwrap();
     std::fs::write(version_dir.join("1.21.1.jar"), b"dummy jar").unwrap();
-    let env = PlatformEnvironment {
-        os_name: "windows".to_string(),
-        arch: "x86_64".to_string(),
-        is_demo_user: false,
-        has_custom_resolution: false,
-    };
+    let mut env = PlatformEnvironment::current();
+    env.os_name = "windows".to_string();
+    env.arch = "x86_64".to_string();
+    env.is_demo_user = false;
+    env.has_custom_resolution = false;
 
     let instance = Instance::new(
         "inst-123".into(),

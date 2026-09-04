@@ -6,6 +6,16 @@ pub struct PlatformEnvironment {
     pub arch: String,      // "x86", "x86_64", "arm64"
     pub is_demo_user: bool,
     pub has_custom_resolution: bool,
+    pub is_quick_play_singleplayer: bool,
+    pub is_quick_play_multiplayer: bool,
+    pub is_quick_play_realms: bool,
+    pub has_quick_plays_support: bool,
+}
+
+impl Default for PlatformEnvironment {
+    fn default() -> Self {
+        Self::current()
+    }
 }
 
 impl PlatformEnvironment {
@@ -33,6 +43,10 @@ impl PlatformEnvironment {
             arch,
             is_demo_user: false,
             has_custom_resolution: false,
+            is_quick_play_singleplayer: false,
+            is_quick_play_multiplayer: false,
+            is_quick_play_realms: false,
+            has_quick_plays_support: false,
         }
     }
 }
@@ -75,15 +89,21 @@ impl ArgumentRuleEvaluator {
             }
         }
 
-        // Evaluate features condition
-        if let Some(features) = rule.get("features") {
-            if let Some(is_demo) = features.get("is_demo_user").and_then(|d| d.as_bool()) {
-                if is_demo != env.is_demo_user {
-                    return false;
-                }
-            }
-            if let Some(has_res) = features.get("has_custom_resolution").and_then(|r| r.as_bool()) {
-                if has_res != env.has_custom_resolution {
+        // Evaluate features condition strictly: if a rule specifies a feature,
+        // it must match the environment state; unknown/inactive features evaluate to false.
+        if let Some(features) = rule.get("features").and_then(|f| f.as_object()) {
+            for (feature_key, required_val) in features {
+                let required_bool = required_val.as_bool().unwrap_or(false);
+                let actual_bool = match feature_key.as_str() {
+                    "is_demo_user" => env.is_demo_user,
+                    "has_custom_resolution" => env.has_custom_resolution,
+                    "is_quick_play_singleplayer" => env.is_quick_play_singleplayer,
+                    "is_quick_play_multiplayer" => env.is_quick_play_multiplayer,
+                    "is_quick_play_realms" => env.is_quick_play_realms,
+                    "has_quick_plays_support" => env.has_quick_plays_support,
+                    _ => false,
+                };
+                if actual_bool != required_bool {
                     return false;
                 }
             }
