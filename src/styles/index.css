@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 9 10 15;
+    --surface: 18 20 29;
+    --surface-elevated: 28 31 46;
+    --accent: 59 130 246;
+  }
+
+  body {
+    color-scheme: dark;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+/* Custom delicate glass scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  backdrop-filter: blur(8px);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Smooth transitions */
+* {
+  box-sizing: border-box;
+}

@@ -1,0 +1,35 @@
+﻿# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production / Build
+dist/
+dist-ssr/
+*.local
+
+# Tauri / Rust
+target/
+src-tauri/target/
+
+# Launcher runtime data (Minecraft instances, logs, caches)
+launcher-data/
+*.log
+
+# Editor / OS
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Environment variables & secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
