@@ -24,6 +24,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"]
 thiserror = "2.0"
 anyhow = "1.0"
 sha1 = "0.10"
+md-5 = "0.10"
 zip = "2.2"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }

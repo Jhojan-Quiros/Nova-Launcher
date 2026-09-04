@@ -9,19 +9,24 @@ use tauri::{Emitter, Manager};
 
 use crate::application::ports::AuthenticationProviderPort;
 use crate::application::use_cases::{
-    CreateInstanceUseCase, DeleteInstanceUseCase, DetectJavaUseCase,
-    FetchMinecraftVersionsUseCase, GetInstanceUseCase, GetSettingsUseCase,
+    CreateInstanceUseCase, CreateOfflineProfileUseCase, DeleteInstanceUseCase,
+    DeleteOfflineProfileUseCase, DetectJavaUseCase, FetchMinecraftVersionsUseCase,
+    GetActiveOfflineProfileUseCase, GetInstanceUseCase, GetSettingsUseCase,
     InstallInstanceUseCase, LaunchInstanceUseCase, ListInstancesUseCase,
-    UpdateInstanceUseCase, UpdateSettingsUseCase,
+    ListOfflineProfilesUseCase, SelectOfflineProfileUseCase, UpdateInstanceUseCase,
+    UpdateSettingsUseCase,
 };
-use crate::infrastructure::auth::DevOfflineAuthenticationProvider;
+use crate::infrastructure::auth::OfflineAuthenticationProvider;
 use crate::infrastructure::downloads::manager::DownloadManager;
 use crate::infrastructure::java::detector::JavaDetector;
 use crate::infrastructure::logging::logger::{LauncherLogger, LogBuffer};
 use crate::infrastructure::minecraft::installer::MinecraftInstaller;
 use crate::infrastructure::minecraft::launcher::MinecraftLauncherService;
 use crate::infrastructure::minecraft::manifest_client::MinecraftVersionManifestClient;
-use crate::infrastructure::persistence::{DatabaseManager, SqliteInstanceRepository, SqliteSettingsRepository};
+use crate::infrastructure::persistence::{
+    DatabaseManager, SqliteInstanceRepository, SqliteOfflineProfileRepository,
+    SqliteSettingsRepository,
+};
 use crate::presentation::commands::*;
 use crate::presentation::state::AppState;
 use crate::shared::config::LauncherPaths;
@@ -41,9 +46,10 @@ pub fn run() {
 
     let instance_repo = Arc::new(SqliteInstanceRepository::new(db_pool.clone()));
     let settings_repo = Arc::new(SqliteSettingsRepository::new(db_pool.clone()));
+    let profile_repo = Arc::new(SqliteOfflineProfileRepository::new(db_pool.clone()));
     let manifest_client = Arc::new(MinecraftVersionManifestClient::new(paths.clone()));
     let java_detector = Arc::new(JavaDetector::new());
-    let auth_provider: Arc<dyn AuthenticationProviderPort> = Arc::new(DevOfflineAuthenticationProvider::default());
+    let auth_provider: Arc<dyn AuthenticationProviderPort> = Arc::new(OfflineAuthenticationProvider::new(profile_repo.clone()));
     let log_buffer = LogBuffer::new(2000);
 
     let log_buffer_for_events = log_buffer.clone();
@@ -101,6 +107,8 @@ pub fn run() {
                 Some(game_log_listener),
             ));
 
+            let profile_repo_for_state = profile_repo.clone();
+
             let state = AppState {
                 create_instance_uc: Arc::new(CreateInstanceUseCase::new(instance_repo.clone(), settings_repo.clone(), paths.clone())),
                 list_instances_uc: Arc::new(ListInstancesUseCase::new(instance_repo.clone())),
@@ -113,6 +121,11 @@ pub fn run() {
                 detect_java_uc: Arc::new(DetectJavaUseCase::new(java_detector.clone())),
                 get_settings_uc: Arc::new(GetSettingsUseCase::new(settings_repo.clone())),
                 update_settings_uc: Arc::new(UpdateSettingsUseCase::new(settings_repo.clone())),
+                get_active_offline_profile_uc: Arc::new(GetActiveOfflineProfileUseCase::new(profile_repo_for_state.clone())),
+                list_offline_profiles_uc: Arc::new(ListOfflineProfilesUseCase::new(profile_repo_for_state.clone())),
+                create_offline_profile_uc: Arc::new(CreateOfflineProfileUseCase::new(profile_repo_for_state.clone())),
+                select_offline_profile_uc: Arc::new(SelectOfflineProfileUseCase::new(profile_repo_for_state.clone())),
+                delete_offline_profile_uc: Arc::new(DeleteOfflineProfileUseCase::new(profile_repo_for_state.clone())),
                 log_buffer: log_buffer_for_events.clone(),
                 paths: paths.clone(),
             };
@@ -140,7 +153,12 @@ pub fn run() {
             update_settings,
             get_logs,
             clear_logs,
-            open_folder
+            open_folder,
+            get_active_offline_profile,
+            list_offline_profiles,
+            create_offline_profile,
+            select_offline_profile,
+            delete_offline_profile
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

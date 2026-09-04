@@ -75,6 +75,14 @@ impl DatabaseManager {
                 major_version INTEGER NOT NULL,
                 raw_version TEXT NOT NULL,
                 is_valid INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS offline_profiles (
+                username TEXT PRIMARY KEY,
+                generated_local_uuid TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                last_used_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 0
             );"
         ).map_err(|e| LauncherError::database(format!("Failed to run database migrations: {}", e)))?;
 

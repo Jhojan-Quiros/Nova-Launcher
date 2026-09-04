@@ -9,9 +9,17 @@ import {
   RefreshCw,
   Check,
   Save,
+  ShieldCheck,
+  Fingerprint,
+  User,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import { GlassPanel, GlassButton, GlassInput, GlassBadge } from "@/components/ui/glass";
 import { useSettings } from "@/features/settings/hooks/useSettings";
+import { useOfflineProfiles } from "@/features/auth/hooks/useOfflineProfiles";
+import { ProfileModal } from "@/features/auth/components/ProfileModal";
+import { formatDate } from "@/utils/formatters";
 import { instancesApi } from "@/services/tauri/instancesApi";
 
 export const SettingsPage: React.FC = () => {
@@ -25,8 +33,11 @@ export const SettingsPage: React.FC = () => {
     detectJava,
   } = useSettings();
 
+  const { activeProfile, profiles, selectProfile } = useOfflineProfiles();
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
   const [activeTab, setActiveTab] = useState<
-    "general" | "minecraft" | "java" | "appearance" | "downloads" | "advanced"
+    "general" | "offline" | "minecraft" | "java" | "appearance" | "downloads" | "advanced"
   >("general");
 
   // Local form state
@@ -75,6 +86,7 @@ export const SettingsPage: React.FC = () => {
 
   const tabs = [
     { id: "general", label: "General", icon: Settings },
+    { id: "offline", label: "Offline Mode", icon: ShieldCheck },
     { id: "minecraft", label: "Minecraft", icon: Monitor },
     { id: "java", label: "Java Runtime", icon: Cpu },
     { id: "appearance", label: "Appearance", icon: Monitor },
@@ -155,6 +167,127 @@ export const SettingsPage: React.FC = () => {
                       className="rounded bg-white/10 border-white/20 text-blue-600 focus:ring-0 h-4 w-4"
                     />
                   </label>
+                </div>
+              </div>
+            )}
+
+            {/* Offline Mode */}
+            {activeTab === "offline" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Offline Mode Configuration</h3>
+                    <p className="text-xs text-slate-400">
+                      Run Minecraft in production or test environments without account authentication or tokens.
+                    </p>
+                  </div>
+                  <GlassButton
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setIsProfileModalOpen(true)}
+                  >
+                    <User className="h-3.5 w-3.5 mr-1.5" />
+                    Manage Profiles
+                  </GlassButton>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-amber-500/[0.08] border border-amber-500/20 text-xs text-amber-300 space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-amber-400" />
+                    Offline Mode is Active (Zero Credentials / Offline Token)
+                  </div>
+                  <p className="text-[11px] text-amber-300/80 leading-relaxed">
+                    The launcher passes an offline session to Minecraft without contacting Microsoft or Mojang authentication servers. Player UUIDs are generated locally and deterministically using Mojang's offline MD5 algorithm.
+                  </p>
+                </div>
+
+                {/* Active Player Card */}
+                {activeProfile && (
+                  <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3.5">
+                        <div className="h-12 w-12 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 font-bold text-lg shadow-inner">
+                          {activeProfile.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base font-semibold text-white">{activeProfile.username}</span>
+                            <GlassBadge variant="success" size="sm">Active Offline Player</GlassBadge>
+                          </div>
+                          <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 mt-1">
+                            <Fingerprint className="h-3.5 w-3.5 text-slate-500" />
+                            <span>{activeProfile.generatedLocalUuid}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <GlassButton
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIsProfileModalOpen(true)}
+                      >
+                        Switch Player
+                      </GlassButton>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/5 text-xs text-slate-400">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                        <span>Created: {formatDate(activeProfile.createdAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-3.5 w-3.5 text-slate-500" />
+                        <span>Last Used: {formatDate(activeProfile.lastUsedAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Saved Profiles Quick List */}
+                <div className="space-y-2 pt-2">
+                  <span className="text-xs font-medium text-slate-300">
+                    Saved Offline Profiles ({profiles.length})
+                  </span>
+                  <div className="space-y-2">
+                    {profiles.map((p) => {
+                      const isActive = activeProfile?.username === p.username;
+                      return (
+                        <div
+                          key={p.username}
+                          className={`flex items-center justify-between p-3 rounded-xl border text-xs transition-all ${
+                            isActive
+                              ? "bg-blue-600/15 border-blue-500/30 text-white"
+                              : "bg-white/[0.02] border-white/5 text-slate-300 hover:bg-white/5"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <User className={`h-4 w-4 ${isActive ? "text-blue-400" : "text-slate-500"}`} />
+                            <div>
+                              <span className="font-medium text-white">{p.username}</span>
+                              <span className="text-[10px] text-slate-500 font-mono ml-2">
+                                {p.generatedLocalUuid}
+                              </span>
+                            </div>
+                          </div>
+
+                          {isActive ? (
+                            <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
+                              <Check className="h-3 w-3" /> Selected
+                            </span>
+                          ) : (
+                            <GlassButton
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => selectProfile(p.username)}
+                            >
+                              Select
+                            </GlassButton>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
@@ -380,6 +513,11 @@ export const SettingsPage: React.FC = () => {
           </GlassPanel>
         </div>
       </div>
+
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
     </div>
   );
 };
