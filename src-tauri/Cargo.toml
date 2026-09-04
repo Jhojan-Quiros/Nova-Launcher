@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "nova-launcher"
 version = "0.1.0"
 description = "Modern Minecraft Desktop Launcher"

@@ -22,6 +22,9 @@ fn test_substitute_placeholders() {
 fn test_build_modern_arguments() {
     let temp = tempdir().unwrap();
     let paths = LauncherPaths::new(temp.path().join("launcher-data"));
+    let version_dir = paths.versions_dir().join("1.21.1");
+    std::fs::create_dir_all(&version_dir).unwrap();
+    std::fs::write(version_dir.join("1.21.1.jar"), b"dummy jar").unwrap();
     let env = PlatformEnvironment {
         os_name: "windows".to_string(),
         arch: "x86_64".to_string(),

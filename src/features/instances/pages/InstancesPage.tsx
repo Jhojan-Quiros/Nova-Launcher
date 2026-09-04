@@ -95,7 +95,8 @@ export const InstancesPage: React.FC = () => {
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onCreate={async (dto) => {
-          await createInstance(dto);
+          const created = await createInstance(dto);
+          installInstance(created.id);
         }}
       />
     </div>

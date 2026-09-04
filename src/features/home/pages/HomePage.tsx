@@ -177,7 +177,15 @@ export const HomePage: React.FC = () => {
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      launchInstance(inst.id);
+                      const statusType =
+                        typeof inst.status === "string"
+                          ? inst.status
+                          : Object.keys(inst.status)[0];
+                      if (statusType === "ready") {
+                        launchInstance(inst.id);
+                      } else {
+                        installInstance(inst.id);
+                      }
                     }}
                     className="text-blue-400 hover:text-blue-300"
                   >
@@ -195,7 +203,8 @@ export const HomePage: React.FC = () => {
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onCreate={async (dto) => {
-          await createInstance(dto);
+          const created = await createInstance(dto);
+          installInstance(created.id);
         }}
       />
     </div>

@@ -118,7 +118,11 @@ impl MinecraftLauncherPort for MinecraftLauncherService {
         inst.set_status(InstanceStatus::Running);
         self.instance_repo.save(&inst).await?;
 
-        let game_dir = PathBuf::from(&inst.game_directory);
+        let game_dir = if std::path::Path::new(&inst.game_directory).is_absolute() {
+            PathBuf::from(&inst.game_directory)
+        } else {
+            self.paths.instance_game_dir(&inst.id)
+        };
         let start_time = Instant::now();
         let instance_id = inst.id.clone();
         let listener = self.log_listener.clone();

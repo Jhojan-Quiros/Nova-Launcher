@@ -9,14 +9,32 @@ pub struct LauncherPaths {
 
 impl LauncherPaths {
     pub fn new(root: impl Into<PathBuf>) -> Self {
+        let root = root.into();
+        let abs_root = if root.is_absolute() {
+            root
+        } else {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            cwd.join(root)
+        };
         Self {
-            root_dir: root.into(),
+            root_dir: abs_root,
         }
     }
 
     pub fn default_path() -> Self {
-        // Look for local launcher-data in current working directory first, fallback to user data dir
-        let local_data = PathBuf::from("launcher-data");
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        // Check if launcher-data exists in cwd or in parent directory
+        let local_data = if cwd.join("launcher-data").exists() {
+            cwd.join("launcher-data")
+        } else if let Some(parent) = cwd.parent() {
+            if parent.join("launcher-data").exists() {
+                parent.join("launcher-data")
+            } else {
+                cwd.join("launcher-data")
+            }
+        } else {
+            cwd.join("launcher-data")
+        };
         Self {
             root_dir: local_data,
         }

@@ -35,7 +35,11 @@ impl ArgumentBuilder {
             .to_string();
 
         let natives_dir = paths.instance_natives_dir(&instance.id).to_string_lossy().to_string();
-        let game_dir = instance.game_directory.clone();
+        let game_dir = if std::path::Path::new(&instance.game_directory).is_absolute() {
+            instance.game_directory.clone()
+        } else {
+            paths.instance_game_dir(&instance.id).to_string_lossy().to_string()
+        };
         let assets_dir = paths.assets_dir().to_string_lossy().to_string();
 
         // Build classpath
@@ -127,6 +131,14 @@ impl ArgumentBuilder {
             .versions_dir()
             .join(&instance.minecraft_version)
             .join(format!("{}.jar", &instance.minecraft_version));
+
+        if !client_jar.exists() {
+            return Err(LauncherError::minecraft(
+                format!("Minecraft client JAR not found at {:?}. Please install the instance first.", client_jar),
+                None,
+            ));
+        }
+
         parts.push(client_jar);
 
         let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
