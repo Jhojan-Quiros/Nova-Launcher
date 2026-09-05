@@ -1,18 +1,34 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Play, Sparkles, Box, Clock, HardDrive, ArrowRight } from "lucide-react";
+import { Plus, Play, Sparkles, Box, Clock, HardDrive, ArrowRight, ArrowUpCircle } from "lucide-react";
+
 import { GlassPanel, GlassCard, GlassButton, GlassBadge } from "@/components/ui/glass";
 import { useInstances } from "@/features/instances/hooks/useInstances";
+import { useModpackStore } from "@/features/modpacks/store/useModpackStore";
 import { CreateInstanceModal } from "@/features/instances/components/CreateInstanceModal";
 import { formatDate } from "@/utils/formatters";
+import { getErrorMessage } from "@/utils/errors";
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { instances, launchInstance, installInstance, createInstance } = useInstances();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const catalog = useModpackStore((s) => s.catalog);
+  const pendingUpdates = catalog.filter((c) => c.updateAvailable);
 
   // Find most recently played or first available instance for Hero Card
   const heroInstance = instances.length > 0 ? instances[0] : null;
+
+  const runAction = async (action: () => Promise<unknown>, fallback: string) => {
+    setActionError(null);
+    try {
+      await action();
+    } catch (err) {
+      setActionError(getErrorMessage(err, fallback));
+    }
+  };
 
   const handleHeroAction = () => {
     if (!heroInstance) return;
@@ -22,9 +38,9 @@ export const HomePage: React.FC = () => {
         : Object.keys(heroInstance.status)[0];
 
     if (statusType === "ready") {
-      launchInstance(heroInstance.id);
-    } else if (statusType === "idle") {
-      installInstance(heroInstance.id);
+      runAction(() => launchInstance(heroInstance.id), "Failed to launch the instance");
+    } else if (statusType === "idle" || statusType === "error") {
+      runAction(() => installInstance(heroInstance.id), "Failed to install the instance");
     }
   };
 
@@ -51,6 +67,12 @@ export const HomePage: React.FC = () => {
           New Instance
         </GlassButton>
       </div>
+
+      {actionError && (
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono break-all">
+          {actionError}
+        </div>
+      )}
 
       {/* Hero Card */}
       {heroInstance ? (
@@ -131,8 +153,40 @@ export const HomePage: React.FC = () => {
         </GlassPanel>
       )}
 
+      {/* Modpack Updates Available Banner */}
+      {pendingUpdates.length > 0 && (
+        <GlassCard className="p-5 border-amber-500/30 bg-amber-500/10 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white">
+                  {pendingUpdates.length} Modpack Update{pendingUpdates.length > 1 ? "s" : ""} Ready
+                </h4>
+                <p className="text-xs text-amber-200/80">
+                  New versions are available with updated mods and performance fixes.
+                </p>
+              </div>
+            </div>
+
+            <GlassButton
+              variant="primary"
+              size="sm"
+              onClick={() => navigate("/modpacks")}
+              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border-amber-500/40 shadow-glow-warning"
+            >
+              <ArrowUpCircle className="h-4 w-4 mr-1.5" />
+              View Updates
+            </GlassButton>
+          </div>
+        </GlassCard>
+      )}
+
       {/* Recent Instances Section */}
       <div className="space-y-4">
+
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-white tracking-tight">
             Your Instances ({instances.length})
@@ -182,9 +236,9 @@ export const HomePage: React.FC = () => {
                           ? inst.status
                           : Object.keys(inst.status)[0];
                       if (statusType === "ready") {
-                        launchInstance(inst.id);
+                        runAction(() => launchInstance(inst.id), "Failed to launch the instance");
                       } else {
-                        installInstance(inst.id);
+                        runAction(() => installInstance(inst.id), "Failed to install the instance");
                       }
                     }}
                     className="text-blue-400 hover:text-blue-300"

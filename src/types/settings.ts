@@ -9,6 +9,15 @@ export interface AppSettings {
   maxConcurrentDownloads: number;
   windowWidth: number;
   windowHeight: number;
+  modpackCatalogUrl?: string;
+  checkUpdatesOnStartup?: boolean;
+  autoCheckIntervalMinutes?: number;
+  allowAutomaticUpdates?: boolean;
+  verifyFilesBeforeLaunch?: boolean;
+  desktopNotifications?: boolean;
+  strictModpackModeDefault?: boolean;
+  activeAuthMode?: "offline" | "microsoft";
+  microsoftClientId?: string;
 }
 
 export interface UpdateSettingsInput {
@@ -20,4 +29,12 @@ export interface UpdateSettingsInput {
   theme?: string;
   blurIntensity?: number;
   maxConcurrentDownloads?: number;
+  modpackCatalogUrl?: string;
+  checkUpdatesOnStartup?: boolean;
+  autoCheckIntervalMinutes?: number;
+  allowAutomaticUpdates?: boolean;
+  verifyFilesBeforeLaunch?: boolean;
+  desktopNotifications?: boolean;
+  strictModpackModeDefault?: boolean;
+  microsoftClientId?: string;
 }

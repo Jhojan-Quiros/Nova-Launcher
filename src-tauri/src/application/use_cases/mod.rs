@@ -9,6 +9,8 @@ pub mod install_instance;
 pub mod launch_instance;
 pub mod detect_java;
 pub mod offline_profile_use_cases;
+pub mod get_forge_versions;
+pub mod microsoft_auth_use_cases;
 
 pub use create_instance::*;
 pub use list_instances::*;
@@ -21,3 +23,5 @@ pub use install_instance::*;
 pub use launch_instance::*;
 pub use detect_java::*;
 pub use offline_profile_use_cases::*;
+pub use get_forge_versions::*;
+pub use microsoft_auth_use_cases::*;

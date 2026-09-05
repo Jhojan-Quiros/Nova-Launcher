@@ -14,11 +14,15 @@ import {
   User,
   Calendar,
   Clock,
+  Package,
 } from "lucide-react";
+
 import { GlassPanel, GlassButton, GlassInput, GlassBadge } from "@/components/ui/glass";
 import { useSettings } from "@/features/settings/hooks/useSettings";
 import { useOfflineProfiles } from "@/features/auth/hooks/useOfflineProfiles";
-import { ProfileModal } from "@/features/auth/components/ProfileModal";
+import { useModpackStore } from "@/features/modpacks/store/useModpackStore";
+import { AccountModal } from "@/features/auth/components/AccountModal";
+import { authApi } from "@/services/tauri/authApi";
 import { formatDate } from "@/utils/formatters";
 import { instancesApi } from "@/services/tauri/instancesApi";
 
@@ -37,7 +41,7 @@ export const SettingsPage: React.FC = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
-    "general" | "offline" | "minecraft" | "java" | "appearance" | "downloads" | "advanced"
+    "general" | "modpacks" | "offline" | "minecraft" | "java" | "appearance" | "downloads" | "advanced"
   >("general");
 
   // Local form state
@@ -48,7 +52,17 @@ export const SettingsPage: React.FC = () => {
   const [theme, setTheme] = useState("dark");
   const [blurIntensity, setBlurIntensity] = useState(100);
   const [maxConcurrentDownloads, setMaxConcurrentDownloads] = useState(8);
+  const [microsoftClientId, setMicrosoftClientId] = useState("");
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Modpack settings state
+  const [modpackCatalogUrl, setModpackCatalogUrl] = useState("");
+  const [checkUpdatesOnStartup, setCheckUpdatesOnStartup] = useState(true);
+  const [autoCheckIntervalMinutes, setAutoCheckIntervalMinutes] = useState(60);
+  const [strictModpackModeDefault, setStrictModpackModeDefault] = useState(false);
+  const [verifyFilesBeforeLaunch, setVerifyFilesBeforeLaunch] = useState(false);
+  const [isTestingCatalog, setIsTestingCatalog] = useState(false);
+  const [catalogTestResult, setCatalogTestResult] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings) {
@@ -59,6 +73,12 @@ export const SettingsPage: React.FC = () => {
       setTheme(settings.theme);
       setBlurIntensity(settings.blurIntensity);
       setMaxConcurrentDownloads(settings.maxConcurrentDownloads);
+      setMicrosoftClientId(settings.microsoftClientId || "");
+      setModpackCatalogUrl(settings.modpackCatalogUrl || "https://pub-afdecd4c468d49edbd6b713db9fa3e7f.r2.dev/modpacks/catalog.json");
+      setCheckUpdatesOnStartup(settings.checkUpdatesOnStartup ?? true);
+      setAutoCheckIntervalMinutes(settings.autoCheckIntervalMinutes ?? 60);
+      setStrictModpackModeDefault(settings.strictModpackModeDefault ?? false);
+      setVerifyFilesBeforeLaunch(settings.verifyFilesBeforeLaunch ?? false);
     }
   }, [settings]);
 
@@ -71,9 +91,29 @@ export const SettingsPage: React.FC = () => {
       theme,
       blurIntensity,
       maxConcurrentDownloads,
+      modpackCatalogUrl,
+      checkUpdatesOnStartup,
+      autoCheckIntervalMinutes,
+      strictModpackModeDefault,
+      verifyFilesBeforeLaunch,
+      microsoftClientId,
     });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
+  };
+
+  const handleTestCatalog = async () => {
+    setIsTestingCatalog(true);
+    setCatalogTestResult(null);
+    try {
+      await updateSettings({ modpackCatalogUrl });
+      await useModpackStore.getState().fetchCatalog(true);
+      setCatalogTestResult("Successfully connected and synced modpack catalog!");
+    } catch (e: any) {
+      setCatalogTestResult(`Failed: ${e?.message || "Could not reach catalog URL"}`);
+    } finally {
+      setIsTestingCatalog(false);
+    }
   };
 
   if (isLoading) {
@@ -86,13 +126,15 @@ export const SettingsPage: React.FC = () => {
 
   const tabs = [
     { id: "general", label: "General", icon: Settings },
-    { id: "offline", label: "Offline Mode", icon: ShieldCheck },
+    { id: "modpacks", label: "Modpacks", icon: Package },
+    { id: "offline", label: "Account", icon: ShieldCheck },
     { id: "minecraft", label: "Minecraft", icon: Monitor },
     { id: "java", label: "Java Runtime", icon: Cpu },
     { id: "appearance", label: "Appearance", icon: Monitor },
     { id: "downloads", label: "Downloads", icon: Download },
     { id: "advanced", label: "Advanced", icon: HardDrive },
   ];
+
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -171,14 +213,152 @@ export const SettingsPage: React.FC = () => {
               </div>
             )}
 
-            {/* Offline Mode */}
+            {/* Modpacks Tab */}
+            {activeTab === "modpacks" && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">
+                    Remote Modpacks & CDN Distribution
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Configure the remote JSON catalog endpoint hosted on Cloudflare R2 or custom CDN.
+                  </p>
+                </div>
+
+                {/* Catalog URL */}
+                <div className="space-y-2 p-4 rounded-2xl bg-white/[0.03] border border-white/10">
+                  <label className="text-xs font-semibold text-slate-200 block">
+                    Modpack Catalog URL (catalog.json)
+                  </label>
+                  <div className="flex gap-2">
+                    <GlassInput
+                      value={modpackCatalogUrl}
+                      onChange={(e) => setModpackCatalogUrl(e.target.value)}
+                      placeholder="https://pub-afdecd4c468d49edbd6b713db9fa3e7f.r2.dev/modpacks/catalog.json"
+                      className="flex-1 font-mono text-xs"
+                    />
+                    <GlassButton
+                      variant="secondary"
+                      size="md"
+                      isLoading={isTestingCatalog}
+                      onClick={handleTestCatalog}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-1.5" />
+                      Test & Refresh
+                    </GlassButton>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Direct public URL to your <code className="text-blue-300">catalog.json</code> file.
+                    The launcher will pull modpack manifests and differential update plans from this domain.
+                  </p>
+                  {catalogTestResult && (
+                    <div
+                      className={`p-2.5 rounded-xl text-xs ${
+                        catalogTestResult.startsWith("Successfully")
+                          ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
+                          : "bg-red-500/15 border border-red-500/30 text-red-300"
+                      }`}
+                    >
+                      {catalogTestResult}
+                    </div>
+                  )}
+                </div>
+
+                {/* Automatic Checks */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Update Checks & Notifications
+                  </h4>
+
+                  <label className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.03] border border-white/10 cursor-pointer hover:bg-white/[0.05] transition-colors">
+                    <div>
+                      <span className="text-xs font-medium text-white block">
+                        Check for Updates on Startup
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        Automatically checks remote manifests 4 seconds after Nova Launcher starts.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={checkUpdatesOnStartup}
+                      onChange={(e) => setCheckUpdatesOnStartup(e.target.checked)}
+                      className="rounded bg-white/10 border-white/20 text-blue-600 focus:ring-0 h-4 w-4"
+                    />
+                  </label>
+
+                  <div className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.03] border border-white/10">
+                    <div>
+                      <span className="text-xs font-medium text-white block">
+                        Background Check Interval (Minutes)
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        How often to query the remote CDN for new modpack releases while running.
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min={10}
+                      max={720}
+                      value={autoCheckIntervalMinutes}
+                      onChange={(e) => setAutoCheckIntervalMinutes(Number(e.target.value))}
+                      className="w-24 px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs text-white text-right focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Strict Mode & Verification Defaults */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    Safety & Integrity
+                  </h4>
+
+                  <label className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.03] border border-white/10 cursor-pointer hover:bg-white/[0.05] transition-colors">
+                    <div className="max-w-md">
+                      <span className="text-xs font-medium text-white block">
+                        Strict Modpack Mode Default
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        When enabled by default on new modpack installs, unmanaged mods in <code className="text-blue-300">mods/</code> are purged during updates to guarantee parity with the remote manifest.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={strictModpackModeDefault}
+                      onChange={(e) => setStrictModpackModeDefault(e.target.checked)}
+                      className="rounded bg-white/10 border-white/20 text-blue-600 focus:ring-0 h-4 w-4"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.03] border border-white/10 cursor-pointer hover:bg-white/[0.05] transition-colors">
+                    <div className="max-w-md">
+                      <span className="text-xs font-medium text-white block">
+                        Verify Files Before Launch
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        Performs a fast SHA-256 integrity check against the installed manifest before launching Minecraft.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={verifyFilesBeforeLaunch}
+                      onChange={(e) => setVerifyFilesBeforeLaunch(e.target.checked)}
+                      className="rounded bg-white/10 border-white/20 text-blue-600 focus:ring-0 h-4 w-4"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Account */}
             {activeTab === "offline" && (
+
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-white">Offline Mode Configuration</h3>
+                    <h3 className="text-sm font-semibold text-white">Account</h3>
                     <p className="text-xs text-slate-400">
-                      Run Minecraft in production or test environments without account authentication or tokens.
+                      Play offline with a local nickname, or sign in with a Microsoft account for online-mode servers.
                     </p>
                   </div>
                   <GlassButton
@@ -187,8 +367,35 @@ export const SettingsPage: React.FC = () => {
                     onClick={() => setIsProfileModalOpen(true)}
                   >
                     <User className="h-3.5 w-3.5 mr-1.5" />
-                    Manage Profiles
+                    Manage Account
                   </GlassButton>
+                </div>
+
+                {/* Microsoft Client ID configuration */}
+                <div className="space-y-2 p-4 rounded-2xl bg-white/[0.03] border border-white/10">
+                  <label className="text-xs font-semibold text-slate-200 block">
+                    Microsoft Application Client ID
+                  </label>
+                  <div className="flex gap-2">
+                    <GlassInput
+                      value={microsoftClientId}
+                      onChange={(e) => setMicrosoftClientId(e.target.value)}
+                      placeholder="e.g. 3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+                      className="flex-1 font-mono text-xs"
+                    />
+                    <GlassButton
+                      variant="secondary"
+                      size="md"
+                      onClick={() => authApi.openExternalUrl("https://portal.azure.com")}
+                    >
+                      Open Azure Portal
+                    </GlassButton>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Required to enable "Sign in with Microsoft". Register a free public-client app at{" "}
+                    <span className="text-blue-300">portal.azure.com</span> → App registrations → New registration
+                    (Personal Microsoft accounts only, allow public client flows), then paste its Application (client) ID here.
+                  </p>
                 </div>
 
                 <div className="p-4 rounded-2xl bg-amber-500/[0.08] border border-amber-500/20 text-xs text-amber-300 space-y-1">
@@ -514,7 +721,7 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      <ProfileModal
+      <AccountModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
       />

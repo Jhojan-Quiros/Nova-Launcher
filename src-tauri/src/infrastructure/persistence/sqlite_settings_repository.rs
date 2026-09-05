@@ -27,8 +27,24 @@ impl SettingsRepository for SqliteSettingsRepository {
             .map_err(|e| LauncherError::database(e.to_string()))?;
 
         match val {
-            Some(json_str) => serde_json::from_str(&json_str)
-                .map_err(|e| LauncherError::database(format!("Corrupted settings JSON: {}", e))),
+            Some(json_str) => {
+                let mut settings: AppSettings = serde_json::from_str(&json_str)
+                    .map_err(|e| LauncherError::database(format!("Corrupted settings JSON: {}", e)))?;
+                let needs_migration = settings.modpack_catalog_url.as_ref()
+                    .map(|s| s.trim().is_empty() || s.contains("example.com"))
+                    .unwrap_or(true);
+                if needs_migration {
+                    settings.modpack_catalog_url = Some("https://pub-afdecd4c468d49edbd6b713db9fa3e7f.r2.dev/modpacks/catalog.json".to_string());
+                    if let Ok(migrated_json) = serde_json::to_string(&settings) {
+                        let _ = conn.execute(
+                            "INSERT INTO settings (key, value) VALUES ('app_config', ?1)
+                             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                            params![migrated_json],
+                        );
+                    }
+                }
+                Ok(settings)
+            }
             None => Ok(AppSettings::default()),
         }
     }

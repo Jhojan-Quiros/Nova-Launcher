@@ -8,8 +8,17 @@ import { InstanceDetailPage } from "@/features/instances/pages/InstanceDetailPag
 import { DownloadsPage } from "@/features/downloads/pages/DownloadsPage";
 import { SettingsPage } from "@/features/settings/pages/SettingsPage";
 import { LogsPage } from "@/features/logs/pages/LogsPage";
-import { onDownloadProgress } from "@/services/tauri/events";
+import { ModpacksPage } from "@/features/modpacks/pages/ModpacksPage";
+import { ModpackDetailPage } from "@/features/modpacks/pages/ModpackDetailPage";
+import { ModpackProgressOverlay } from "@/features/modpacks/components/ModpackProgressOverlay";
+import {
+  onDownloadProgress,
+  onModpackProgress,
+  onModpackUpdatesFound,
+} from "@/services/tauri/events";
 import { useDownloadStore } from "@/store/useDownloadStore";
+import { useModpackStore } from "@/features/modpacks/store/useModpackStore";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,32 +34,57 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     // Wire global Tauri event listener for download progress
-    let unlisten: (() => void) | undefined;
+    let unlistenDl: (() => void) | undefined;
+    let unlistenModpack: (() => void) | undefined;
+    let unlistenUpdates: (() => void) | undefined;
+
     onDownloadProgress((payload) => {
       updateProgress(payload);
     }).then((fn) => {
-      unlisten = fn;
+      unlistenDl = fn;
     });
 
+    onModpackProgress((payload) => {
+      useModpackStore.getState().updateJobProgress(payload);
+    }).then((fn) => {
+      unlistenModpack = fn;
+    });
+
+    onModpackUpdatesFound((count) => {
+      useModpackStore.getState().setAvailableUpdatesCount(count);
+    }).then((fn) => {
+      unlistenUpdates = fn;
+    });
+
+    // Initial catalog fetch
+    useModpackStore.getState().fetchCatalog();
+
     return () => {
-      if (unlisten) unlisten();
+      if (unlistenDl) unlistenDl();
+      if (unlistenModpack) unlistenModpack();
+      if (unlistenUpdates) unlistenUpdates();
     };
   }, [updateProgress]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <HashRouter>
-        <Routes>
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<HomePage />} />
-            <Route path="instances" element={<InstancesPage />} />
-            <Route path="instances/:id" element={<InstanceDetailPage />} />
-            <Route path="downloads" element={<DownloadsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="logs" element={<LogsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<MainLayout />}>
+              <Route index element={<HomePage />} />
+              <Route path="instances" element={<InstancesPage />} />
+              <Route path="instances/:id" element={<InstanceDetailPage />} />
+              <Route path="modpacks" element={<ModpacksPage />} />
+              <Route path="modpacks/:id" element={<ModpackDetailPage />} />
+              <Route path="downloads" element={<DownloadsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="logs" element={<LogsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+          <ModpackProgressOverlay />
+        </ErrorBoundary>
       </HashRouter>
     </QueryClientProvider>
   );

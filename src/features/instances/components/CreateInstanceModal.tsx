@@ -1,7 +1,8 @@
-import React, { useState } from "react";
-import { Check, Sparkles, Box, HardDrive, Cpu, Search } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Check, Sparkles, Box, HardDrive, Cpu, Search, Loader2 } from "lucide-react";
 import { GlassModal, GlassButton, GlassInput, GlassCard } from "@/components/ui/glass";
 import { useMinecraftVersions } from "@/features/minecraft/hooks/useMinecraftVersions";
+import { useForgeVersions } from "@/features/minecraft/hooks/useForgeVersions";
 import type { CreateInstanceInput, ModLoader } from "@/types";
 
 interface CreateInstanceModalProps {
@@ -19,6 +20,7 @@ export const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({
   const [name, setName] = useState("");
   const [selectedVersion, setSelectedVersion] = useState("1.21.1");
   const [loader, setLoader] = useState<ModLoader>("vanilla");
+  const [loaderVersion, setLoaderVersion] = useState<string | undefined>(undefined);
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [versionSearch, setVersionSearch] = useState("");
   const [minRam, setMinRam] = useState(2048);
@@ -38,10 +40,37 @@ export const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({
     v.id.toLowerCase().includes(versionSearch.toLowerCase())
   );
 
+  const {
+    data: forgeVersions,
+    isLoading: forgeVersionsLoading,
+    isError: forgeVersionsErrored,
+  } = useForgeVersions(selectedVersion, loader === "forge");
+
+  // Reset the picked Forge build whenever the loader or MC version changes,
+  // and auto-pick the recommended build once options come back.
+  useEffect(() => {
+    if (loader !== "forge") {
+      setLoaderVersion(undefined);
+      return;
+    }
+    if (forgeVersions && forgeVersions.length > 0) {
+      const recommended = forgeVersions.find((v) => v.label === "recommended");
+      setLoaderVersion(recommended?.version ?? forgeVersions[0].version);
+    } else {
+      setLoaderVersion(undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loader, selectedVersion, forgeVersions]);
+
   const handleCreate = async () => {
     if (!name.trim()) {
       setError("Please enter a name for your instance");
       setStep(1);
+      return;
+    }
+    if (loader === "forge" && !loaderVersion) {
+      setError("Please select a Forge build for this Minecraft version");
+      setStep(3);
       return;
     }
     setError(null);
@@ -51,6 +80,7 @@ export const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({
         name: name.trim(),
         minecraftVersion: selectedVersion,
         loader,
+        loaderVersion: loader === "forge" ? loaderVersion : undefined,
         minRam,
         maxRam,
       });
@@ -198,66 +228,99 @@ export const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({
 
       {/* Step 3: Mod Loader */}
       {step === 3 && (
-        <div className="grid grid-cols-2 gap-3 py-2">
-          {/* Vanilla */}
-          <GlassCard
-            active={loader === "vanilla"}
-            onClick={() => setLoader("vanilla")}
-            className="p-4"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <Box className="h-5 w-5 text-blue-400" />
-              <span className="font-semibold text-sm text-white">Vanilla</span>
-            </div>
-            <p className="text-xs text-slate-400">
-              Official unmodified Minecraft. Fast, stable, and pure.
-            </p>
-          </GlassCard>
-
-          {/* Fabric */}
-          <GlassCard
-            interactive={false}
-            className="p-4 opacity-50 cursor-not-allowed border-dashed"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5 text-amber-400" />
-                <span className="font-semibold text-sm text-white">Fabric</span>
+        <div className="space-y-3 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            {/* Vanilla */}
+            <GlassCard
+              active={loader === "vanilla"}
+              onClick={() => setLoader("vanilla")}
+              className="p-4"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <Box className="h-5 w-5 text-blue-400" />
+                <span className="font-semibold text-sm text-white">Vanilla</span>
               </div>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Coming Soon</span>
-            </div>
-            <p className="text-xs text-slate-400">Lightweight modular mod loader.</p>
-          </GlassCard>
+              <p className="text-xs text-slate-400">
+                Official unmodified Minecraft. Fast, stable, and pure.
+              </p>
+            </GlassCard>
 
-          {/* Forge */}
-          <GlassCard
-            interactive={false}
-            className="p-4 opacity-50 cursor-not-allowed border-dashed"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
+            {/* Forge */}
+            <GlassCard
+              active={loader === "forge"}
+              onClick={() => setLoader("forge")}
+              className="p-4"
+            >
+              <div className="flex items-center gap-3 mb-2">
                 <HardDrive className="h-5 w-5 text-orange-400" />
                 <span className="font-semibold text-sm text-white">Forge</span>
               </div>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Coming Soon</span>
-            </div>
-            <p className="text-xs text-slate-400">Classic modding ecosystem.</p>
-          </GlassCard>
+              <p className="text-xs text-slate-400">Classic modding ecosystem.</p>
+            </GlassCard>
 
-          {/* NeoForge */}
-          <GlassCard
-            interactive={false}
-            className="p-4 opacity-50 cursor-not-allowed border-dashed"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
-                <Cpu className="h-5 w-5 text-purple-400" />
-                <span className="font-semibold text-sm text-white">NeoForge</span>
+            {/* Fabric */}
+            <GlassCard
+              interactive={false}
+              className="p-4 opacity-50 cursor-not-allowed border-dashed"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <Sparkles className="h-5 w-5 text-amber-400" />
+                  <span className="font-semibold text-sm text-white">Fabric</span>
+                </div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Coming Soon</span>
               </div>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Coming Soon</span>
+              <p className="text-xs text-slate-400">Lightweight modular mod loader.</p>
+            </GlassCard>
+
+            {/* NeoForge */}
+            <GlassCard
+              interactive={false}
+              className="p-4 opacity-50 cursor-not-allowed border-dashed"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <Cpu className="h-5 w-5 text-purple-400" />
+                  <span className="font-semibold text-sm text-white">NeoForge</span>
+                </div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400">Coming Soon</span>
+              </div>
+              <p className="text-xs text-slate-400">Modern fork of Forge for 1.20.2+.</p>
+            </GlassCard>
+          </div>
+
+          {loader === "forge" && (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
+              <span className="text-xs text-slate-400">Forge build for {selectedVersion}</span>
+              {forgeVersionsLoading ? (
+                <div className="flex items-center gap-2 text-xs text-slate-400 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Checking available Forge builds...
+                </div>
+              ) : forgeVersionsErrored || !forgeVersions || forgeVersions.length === 0 ? (
+                <p className="text-xs text-red-300 py-1">
+                  No Forge build is published for Minecraft {selectedVersion}. Pick a different version in step 2.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {forgeVersions.map((v) => (
+                    <button
+                      key={v.version}
+                      type="button"
+                      onClick={() => setLoaderVersion(v.version)}
+                      className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${
+                        loaderVersion === v.version
+                          ? "bg-orange-500/20 border-orange-400/50 text-white font-semibold"
+                          : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"
+                      }`}
+                    >
+                      {v.version} <span className="text-slate-400 capitalize">({v.label})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <p className="text-xs text-slate-400">Modern fork of Forge for 1.20.2+.</p>
-          </GlassCard>
+          )}
         </div>
       )}
 
@@ -318,7 +381,10 @@ export const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({
             </div>
             <div className="flex justify-between border-b border-white/5 pb-2">
               <span className="text-slate-400">Loader</span>
-              <span className="text-white font-semibold capitalize">{loader}</span>
+              <span className="text-white font-semibold capitalize">
+                {loader}
+                {loader === "forge" && loaderVersion ? ` ${loaderVersion}` : ""}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Allocated RAM</span>
@@ -344,6 +410,10 @@ export const CreateInstanceModal: React.FC<CreateInstanceModalProps> = ({
             onClick={() => {
               if (step === 1 && !name.trim()) {
                 setError("Please enter a name");
+                return;
+              }
+              if (step === 3 && loader === "forge" && !loaderVersion) {
+                setError("Please select a Forge build for this Minecraft version");
                 return;
               }
               setError(null);

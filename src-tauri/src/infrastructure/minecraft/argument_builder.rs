@@ -51,7 +51,8 @@ impl ArgumentBuilder {
         placeholders.insert("launcher_name", "nova-launcher".to_string());
         placeholders.insert("launcher_version", "1.0.0".to_string());
         placeholders.insert("classpath", classpath.clone());
-        placeholders.insert("classpath_separator", ";".to_string());
+        let classpath_sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+        placeholders.insert("classpath_separator", classpath_sep.to_string());
         placeholders.insert("library_directory", paths.libraries_dir().to_string_lossy().to_string());
         placeholders.insert("auth_player_name", account.username.clone());
         placeholders.insert("version_name", instance.minecraft_version.clone());

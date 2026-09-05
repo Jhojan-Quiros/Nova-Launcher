@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use regex::Regex;
-use crate::domain::entities::OfflineProfile;
+use crate::domain::entities::{AccountType, OfflineProfile};
 use crate::domain::errors::LauncherError;
-use crate::domain::repositories::OfflineProfileRepository;
+use crate::domain::repositories::{OfflineProfileRepository, SettingsRepository};
 
 pub struct GetActiveOfflineProfileUseCase {
     repo: Arc<dyn OfflineProfileRepository>,
@@ -34,11 +34,12 @@ impl ListOfflineProfilesUseCase {
 
 pub struct CreateOfflineProfileUseCase {
     repo: Arc<dyn OfflineProfileRepository>,
+    settings_repo: Arc<dyn SettingsRepository>,
 }
 
 impl CreateOfflineProfileUseCase {
-    pub fn new(repo: Arc<dyn OfflineProfileRepository>) -> Self {
-        Self { repo }
+    pub fn new(repo: Arc<dyn OfflineProfileRepository>, settings_repo: Arc<dyn SettingsRepository>) -> Self {
+        Self { repo, settings_repo }
     }
 
     pub async fn execute(&self, username: String) -> Result<OfflineProfile, LauncherError> {
@@ -59,21 +60,33 @@ impl CreateOfflineProfileUseCase {
 
         let profile = OfflineProfile::new(trimmed);
         self.repo.save(&profile, true).await?;
+
+        let mut settings = self.settings_repo.get().await?;
+        settings.active_auth_mode = AccountType::Offline;
+        self.settings_repo.save(&settings).await?;
+
         Ok(profile)
     }
 }
 
 pub struct SelectOfflineProfileUseCase {
     repo: Arc<dyn OfflineProfileRepository>,
+    settings_repo: Arc<dyn SettingsRepository>,
 }
 
 impl SelectOfflineProfileUseCase {
-    pub fn new(repo: Arc<dyn OfflineProfileRepository>) -> Self {
-        Self { repo }
+    pub fn new(repo: Arc<dyn OfflineProfileRepository>, settings_repo: Arc<dyn SettingsRepository>) -> Self {
+        Self { repo, settings_repo }
     }
 
     pub async fn execute(&self, username: String) -> Result<OfflineProfile, LauncherError> {
-        self.repo.set_active(username.trim()).await
+        let profile = self.repo.set_active(username.trim()).await?;
+
+        let mut settings = self.settings_repo.get().await?;
+        settings.active_auth_mode = AccountType::Offline;
+        self.settings_repo.save(&settings).await?;
+
+        Ok(profile)
     }
 }
 

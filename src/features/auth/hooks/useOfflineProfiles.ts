@@ -25,6 +25,7 @@ export const useOfflineProfiles = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OFFLINE_PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: OFFLINE_PROFILES_LIST_KEY });
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
   });
 
@@ -33,6 +34,7 @@ export const useOfflineProfiles = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OFFLINE_PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: OFFLINE_PROFILES_LIST_KEY });
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
   });
 
@@ -41,6 +43,7 @@ export const useOfflineProfiles = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OFFLINE_PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: OFFLINE_PROFILES_LIST_KEY });
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
   });
 

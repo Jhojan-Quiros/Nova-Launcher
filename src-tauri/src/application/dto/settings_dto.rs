@@ -12,6 +12,7 @@ pub struct UpdateSettingsDto {
     pub theme: Option<String>,
     pub blur_intensity: Option<u32>,
     pub max_concurrent_downloads: Option<usize>,
+    pub microsoft_client_id: Option<String>,
 }
 
 impl UpdateSettingsDto {
@@ -39,6 +40,9 @@ impl UpdateSettingsDto {
         }
         if let Some(m) = self.max_concurrent_downloads {
             target.max_concurrent_downloads = m;
+        }
+        if let Some(val) = &self.microsoft_client_id {
+            target.microsoft_client_id = if val.trim().is_empty() { None } else { Some(val.trim().to_string()) };
         }
     }
 }
