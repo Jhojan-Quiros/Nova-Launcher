@@ -4,59 +4,57 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use crate::application::ports::{DownloadItem, DownloadManagerPort, ManifestClientPort, ModLoaderInstallerPort};
-use crate::domain::entities::{Instance, InstanceStatus, ModLoader};
+use crate::domain::entities::{Instance, ModLoader};
 use crate::domain::errors::LauncherError;
-use crate::domain::repositories::InstanceRepository;
 use crate::infrastructure::minecraft::rule_evaluator::{ArgumentRuleEvaluator, PlatformEnvironment};
+use crate::infrastructure::process::supervisor::LogListener;
 use crate::shared::config::LauncherPaths;
 use crate::shared::utils::ZipExtractor;
 
 pub struct MinecraftInstaller {
     manifest_client: Arc<dyn ManifestClientPort>,
     download_manager: Arc<dyn DownloadManagerPort>,
-    instance_repo: Arc<dyn InstanceRepository>,
     paths: LauncherPaths,
+    log_listener: Option<LogListener>,
 }
 
 impl MinecraftInstaller {
     pub fn new(
         manifest_client: Arc<dyn ManifestClientPort>,
         download_manager: Arc<dyn DownloadManagerPort>,
-        instance_repo: Arc<dyn InstanceRepository>,
         paths: LauncherPaths,
+        log_listener: Option<LogListener>,
     ) -> Self {
         Self {
             manifest_client,
             download_manager,
-            instance_repo,
             paths,
+            log_listener,
         }
     }
 
-    pub async fn install(&self, instance_id: &str) -> Result<(), LauncherError> {
-        let mut instance = self.instance_repo.find_by_id(instance_id).await?
-            .ok_or_else(|| LauncherError::not_found(format!("Instance {} not found", instance_id)))?;
-
-        instance.set_status(InstanceStatus::Installing);
-        self.instance_repo.save(&instance).await?;
-
-        let install_result = self.perform_install(&instance).await;
-
-        match install_result {
-            Ok(()) => {
-                instance.set_status(InstanceStatus::Ready);
-                let _ = self.instance_repo.save(&instance).await;
-                Ok(())
-            }
-            Err(e) => {
-                instance.set_status(InstanceStatus::Error(e.to_string()));
-                let _ = self.instance_repo.save(&instance).await;
-                Err(e)
-            }
+    fn log(&self, instance_id: &str, level: &str, message: &str) {
+        tracing::info!("[{}] {}", instance_id, message);
+        if let Some(listener) = &self.log_listener {
+            listener(instance_id, level, message);
         }
     }
 
-    async fn perform_install(&self, instance: &Instance) -> Result<(), LauncherError> {
+    /// Downloads and installs the plain vanilla client (jar, libraries, assets) for
+    /// an instance's `minecraft_version`. Used directly for vanilla instances, and as
+    /// the base install step for mod loaders (Forge, etc.) that build on top of it.
+    /// Does not manage `instance.status` - the caller (an install use case) does that.
+    pub async fn install_base(&self, instance: &Instance) -> Result<(), LauncherError> {
+        self.log(&instance.id, "INFO", &format!("Preparing Minecraft {} (vanilla base)...", instance.minecraft_version));
+        let result = self.install_base_inner(instance).await;
+        match &result {
+            Ok(()) => self.log(&instance.id, "INFO", "Vanilla base ready"),
+            Err(e) => self.log(&instance.id, "ERROR", &format!("Vanilla install failed: {}", e)),
+        }
+        result
+    }
+
+    async fn install_base_inner(&self, instance: &Instance) -> Result<(), LauncherError> {
         let version_id = &instance.minecraft_version;
         let version_dir = self.paths.versions_dir().join(version_id);
         let version_json_path = version_dir.join(format!("{}.json", version_id));
@@ -206,7 +204,7 @@ impl MinecraftInstaller {
         }
 
         // 5. Execute batch download with concurrency limiter & progress tracking
-        tracing::info!("Downloading {} assets, libraries, and client jar for instance {}", download_items.len(), instance.id);
+        self.log(&instance.id, "INFO", &format!("Downloading {} assets, libraries, and the client jar...", download_items.len()));
         self.download_manager.download_batch(Some(instance.id.clone()), download_items).await?;
 
         // 6. Extract natives into instance directory
@@ -239,6 +237,6 @@ impl ModLoaderInstallerPort for VanillaInstaller {
     }
 
     async fn install(&self, instance: &Instance) -> Result<(), LauncherError> {
-        self.installer.install(&instance.id).await
+        self.installer.install_base(instance).await
     }
 }

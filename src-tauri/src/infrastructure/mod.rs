@@ -6,3 +6,4 @@ pub mod process;
 pub mod logging;
 pub mod filesystem;
 pub mod auth;
+pub mod modpacks;

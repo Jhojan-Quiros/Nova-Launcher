@@ -15,6 +15,8 @@ import {
 import { cn } from "@/utils/cn";
 import { useAppStore } from "@/store/useAppStore";
 import { useDownloadStore } from "@/store/useDownloadStore";
+import { useModpackStore } from "@/features/modpacks/store/useModpackStore";
+
 
 interface NavItemProps {
   to: string;
@@ -85,6 +87,7 @@ const NavItem: React.FC<NavItemProps> = ({
 export const Sidebar: React.FC = () => {
   const { sidebarCollapsed, toggleSidebar } = useAppStore();
   const isDownloading = useDownloadStore((s) => s.isDownloading);
+  const availableUpdatesCount = useModpackStore((s) => s.availableUpdatesCount);
 
   return (
     <aside
@@ -123,7 +126,13 @@ export const Sidebar: React.FC = () => {
           <NavItem to="/" icon={Home} label="Home" collapsed={sidebarCollapsed} />
           <NavItem to="/instances" icon={Layers} label="Instances" collapsed={sidebarCollapsed} />
           <NavItem to="/mods" icon={Puzzle} label="Mods" comingSoon collapsed={sidebarCollapsed} />
-          <NavItem to="/modpacks" icon={Package} label="Modpacks" comingSoon collapsed={sidebarCollapsed} />
+          <NavItem
+            to="/modpacks"
+            icon={Package}
+            label="Modpacks"
+            badge={availableUpdatesCount > 0 ? `${availableUpdatesCount}` : undefined}
+            collapsed={sidebarCollapsed}
+          />
           <NavItem
             to="/downloads"
             icon={Download}
@@ -131,6 +140,7 @@ export const Sidebar: React.FC = () => {
             badge={isDownloading ? "Active" : undefined}
             collapsed={sidebarCollapsed}
           />
+
         </nav>
       </div>
 

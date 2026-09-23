@@ -83,6 +83,61 @@ impl DatabaseManager {
                 created_at TEXT NOT NULL,
                 last_used_at TEXT NOT NULL,
                 is_active INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS microsoft_account (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                uuid TEXT NOT NULL,
+                minecraft_access_token TEXT NOT NULL,
+                minecraft_token_expires_at TEXT NOT NULL,
+                ms_refresh_token TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS installed_modpacks (
+                instance_id TEXT PRIMARY KEY,
+                modpack_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                installed_version TEXT NOT NULL,
+                latest_known_version TEXT,
+                manifest_url TEXT NOT NULL,
+                icon_url TEXT,
+                banner_url TEXT,
+                installed_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_verified_at TEXT,
+                status TEXT NOT NULL,
+                strict_mode INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY(instance_id) REFERENCES instances(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS modpack_versions (
+                pack_id TEXT NOT NULL,
+                version TEXT NOT NULL,
+                minecraft_version TEXT NOT NULL,
+                loader TEXT NOT NULL,
+                loader_version TEXT,
+                changelog_json TEXT NOT NULL DEFAULT '[]',
+                stats_json TEXT NOT NULL DEFAULT '{}',
+                manifest_json TEXT NOT NULL,
+                cached_at TEXT NOT NULL,
+                PRIMARY KEY (pack_id, version)
+            );
+
+            CREATE TABLE IF NOT EXISTS modpack_update_history (
+                id TEXT PRIMARY KEY,
+                instance_id TEXT NOT NULL,
+                pack_id TEXT NOT NULL,
+                from_version TEXT NOT NULL,
+                to_version TEXT NOT NULL,
+                status TEXT NOT NULL,
+                download_size INTEGER NOT NULL DEFAULT 0,
+                started_at TEXT NOT NULL,
+                completed_at TEXT,
+                error_code TEXT,
+                FOREIGN KEY(instance_id) REFERENCES instances(id) ON DELETE CASCADE
             );"
         ).map_err(|e| LauncherError::database(format!("Failed to run database migrations: {}", e)))?;
 

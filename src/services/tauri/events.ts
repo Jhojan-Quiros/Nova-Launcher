@@ -16,3 +16,22 @@ export async function onGameLog(
     callback(event.payload);
   });
 }
+
+export async function onModpackProgress(
+  callback: (payload: import("@/types").ModpackDownloadJobProgress) => void
+): Promise<UnlistenFn> {
+  return listen<import("@/types").ModpackDownloadJobProgress>(
+    "modpack-update-progress",
+    (event) => {
+      callback(event.payload);
+    }
+  );
+}
+
+export async function onModpackUpdatesFound(
+  callback: (count: number) => void
+): Promise<UnlistenFn> {
+  return listen<number>("modpack-updates-found", (event) => {
+    callback(event.payload);
+  });
+}

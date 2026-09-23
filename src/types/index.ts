@@ -4,3 +4,6 @@ export * from "./java";
 export * from "./settings";
 export * from "./download";
 export * from "./log";
+export * from "./offlineProfile";
+export * from "./modpack";
+export * from "./account";

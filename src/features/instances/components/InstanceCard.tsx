@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Play, FolderOpen, MoreVertical, Trash2, Settings, Box, Loader2 } from "lucide-react";
+import { Play, FolderOpen, MoreVertical, Trash2, Settings, Box, Loader2, Sparkles } from "lucide-react";
+
 import { GlassCard, GlassButton, GlassBadge } from "@/components/ui/glass";
 import { formatDate } from "@/utils/formatters";
+import { useModpackStore } from "@/features/modpacks/store/useModpackStore";
 import type { Instance } from "@/types";
 
 interface InstanceCardProps {
@@ -25,6 +27,11 @@ export const InstanceCard: React.FC<InstanceCardProps> = ({
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const modpackItem = useModpackStore((s) =>
+    s.catalog.find((c) => c.associatedInstanceId === instance.id)
+  );
+
+
   // Status computation
   const statusType =
     typeof instance.status === "string"
@@ -35,12 +42,17 @@ export const InstanceCard: React.FC<InstanceCardProps> = ({
   const isRunning = statusType === "running";
   const isReady = statusType === "ready";
   const isIdle = statusType === "idle";
+  const isError = statusType === "error";
+  const errorMessage =
+    isError && typeof instance.status === "object" && "error" in instance.status
+      ? instance.status.error
+      : undefined;
 
   const handlePrimaryAction = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isReady) {
       onPlay(instance.id);
-    } else if (isIdle) {
+    } else if (isIdle || isError) {
       onInstall(instance.id);
     }
   };
@@ -70,12 +82,26 @@ export const InstanceCard: React.FC<InstanceCardProps> = ({
               <span className="text-xs font-medium text-slate-400 capitalize">
                 {instance.loader}
               </span>
+              {modpackItem && (
+                <>
+                  <span className="h-1 w-1 rounded-full bg-slate-600" />
+                  <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    Modpack
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         {/* Status badge */}
-        <div className="relative">
+        <div className="relative flex flex-col items-end gap-1.5">
+          {modpackItem?.updateAvailable && (
+            <GlassBadge variant="warning" className="shadow-glow-sm animate-pulse">
+              <Sparkles className="h-3 w-3 mr-1" />
+              Update
+            </GlassBadge>
+          )}
           {isRunning && (
             <GlassBadge variant="success">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1.5 animate-ping" />
@@ -88,11 +114,16 @@ export const InstanceCard: React.FC<InstanceCardProps> = ({
               Installing
             </GlassBadge>
           )}
-          {isReady && <GlassBadge variant="default">Ready</GlassBadge>}
+          {isReady && !isRunning && <GlassBadge variant="default">Ready</GlassBadge>}
           {isIdle && <GlassBadge variant="warning">Not Installed</GlassBadge>}
-          {statusType === "error" && <GlassBadge variant="danger">Error</GlassBadge>}
+          {isError && (
+            <GlassBadge variant="danger" title={errorMessage}>
+              Error
+            </GlassBadge>
+          )}
         </div>
       </div>
+
 
       {/* Middle info */}
       <div className="space-y-1.5 text-xs text-slate-400 pt-2 border-t border-white/[0.06]">
@@ -129,6 +160,8 @@ export const InstanceCard: React.FC<InstanceCardProps> = ({
               <Play className="h-3.5 w-3.5 mr-1.5 fill-current" />
               PLAY
             </>
+          ) : isError ? (
+            "RETRY"
           ) : (
             "INSTALL"
           )}

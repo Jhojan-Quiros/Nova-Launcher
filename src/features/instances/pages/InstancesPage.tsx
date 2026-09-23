@@ -5,6 +5,7 @@ import { useInstances } from "@/features/instances/hooks/useInstances";
 import { InstanceCard } from "@/features/instances/components/InstanceCard";
 import { CreateInstanceModal } from "@/features/instances/components/CreateInstanceModal";
 import { instancesApi } from "@/services/tauri/instancesApi";
+import { getErrorMessage } from "@/utils/errors";
 
 export const InstancesPage: React.FC = () => {
   const {
@@ -19,11 +20,21 @@ export const InstancesPage: React.FC = () => {
 
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const filtered = instances.filter((i) =>
     i.name.toLowerCase().includes(search.toLowerCase()) ||
     i.minecraftVersion.toLowerCase().includes(search.toLowerCase())
   );
+
+  const runAction = async (action: () => Promise<unknown>, fallback: string) => {
+    setActionError(null);
+    try {
+      await action();
+    } catch (err) {
+      setActionError(getErrorMessage(err, fallback));
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -49,6 +60,12 @@ export const InstancesPage: React.FC = () => {
           </GlassButton>
         </div>
       </div>
+
+      {actionError && (
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono break-all">
+          {actionError}
+        </div>
+      )}
 
       {/* Search and filters */}
       <div className="relative max-w-md">
@@ -82,8 +99,8 @@ export const InstancesPage: React.FC = () => {
             <InstanceCard
               key={inst.id}
               instance={inst}
-              onPlay={(id) => launchInstance(id)}
-              onInstall={(id) => installInstance(id)}
+              onPlay={(id) => runAction(() => launchInstance(id), "Failed to launch the instance")}
+              onInstall={(id) => runAction(() => installInstance(id), "Failed to install the instance")}
               onDelete={(id) => deleteInstance(id)}
               onOpenFolder={(path) => instancesApi.openFolder(path)}
             />

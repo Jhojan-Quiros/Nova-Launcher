@@ -14,12 +14,24 @@ import {
   Save,
   Loader2,
   Trash2,
+  Package,
+  Sparkles,
+  Wrench,
+  ArrowUpCircle,
+  CheckCircle2,
+  RefreshCw,
 } from "lucide-react";
+
 import { GlassPanel, GlassCard, GlassButton, GlassBadge, GlassInput } from "@/components/ui/glass";
 import { useInstance, useInstances } from "@/features/instances/hooks/useInstances";
 import { useLogs } from "@/features/logs/hooks/useLogs";
-import { formatDate, formatDuration } from "@/utils/formatters";
+import { formatDate, formatDuration, formatBytes } from "@/utils/formatters";
 import { instancesApi } from "@/services/tauri/instancesApi";
+import { modpacksApi } from "@/services/tauri/modpacksApi";
+import { ModpackUpdateModal } from "@/features/modpacks/components/ModpackUpdateModal";
+import { ModpackRepairModal } from "@/features/modpacks/components/ModpackRepairModal";
+import { getErrorMessage } from "@/utils/errors";
+import type { InstalledModpack, ModpackUpdateHistoryRecord } from "@/types";
 
 export const InstanceDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +40,40 @@ export const InstanceDetailPage: React.FC = () => {
   const { updateInstance, deleteInstance, launchInstance, installInstance } = useInstances();
   const { logs, clear } = useLogs(id);
 
-  const [activeTab, setActiveTab] = useState<"overview" | "mods" | "settings" | "logs">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "mods" | "modpack" | "settings" | "logs">("overview");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isPlayLoading, setIsPlayLoading] = useState(false);
+
+  // Modpack state
+  const [installedModpack, setInstalledModpack] = useState<InstalledModpack | null>(null);
+  const [modpackHistory, setModpackHistory] = useState<ModpackUpdateHistoryRecord[]>([]);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [repairModalOpen, setRepairModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (id) {
+      modpacksApi.getInstalledForInstance(id).then((pack) => {
+        setInstalledModpack(pack);
+      });
+      modpacksApi.getHistory(id).then((hist) => {
+        setModpackHistory(hist);
+      });
+    }
+  }, [id]);
+
+  const checkModpackUpdate = async () => {
+    if (!id) return;
+    setIsCheckingUpdate(true);
+    try {
+      await modpacksApi.checkUpdate(id);
+      const updated = await modpacksApi.getInstalledForInstance(id);
+      setInstalledModpack(updated);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
 
   // Settings form state
   const [editName, setEditName] = useState("");
@@ -74,6 +119,39 @@ export const InstanceDetailPage: React.FC = () => {
   const isRunning = statusType === "running";
   const isInstalling = statusType === "installing";
   const isReady = statusType === "ready";
+  const isError = statusType === "error";
+  const persistedError =
+    isError && typeof instance.status === "object" && "error" in instance.status
+      ? instance.status.error
+      : null;
+
+  const handlePlayOrInstall = async () => {
+    setActionError(null);
+    setIsPlayLoading(true);
+    try {
+      if (isReady) {
+        await launchInstance(instance.id);
+      } else {
+        await installInstance(instance.id);
+      }
+    } catch (err) {
+      setActionError(getErrorMessage(err, "Failed to start the instance"));
+    } finally {
+      setIsPlayLoading(false);
+    }
+  };
+
+  const handleReinstall = async () => {
+    setActionError(null);
+    setIsPlayLoading(true);
+    try {
+      await installInstance(instance.id);
+    } catch (err) {
+      setActionError(getErrorMessage(err, "Failed to reinstall the instance"));
+    } finally {
+      setIsPlayLoading(false);
+    }
+  };
 
   const handleSaveSettings = async () => {
     setIsSaving(true);
@@ -124,8 +202,8 @@ export const InstanceDetailPage: React.FC = () => {
             <div className="space-y-1">
               <div className="flex items-center gap-2.5">
                 <h1 className="text-2xl font-bold text-white tracking-tight">{instance.name}</h1>
-                <GlassBadge variant={isRunning ? "success" : isReady ? "default" : "warning"}>
-                  {isRunning ? "Running" : isReady ? "Ready" : isInstalling ? "Installing" : "Idle"}
+                <GlassBadge variant={isRunning ? "success" : isReady ? "default" : isError ? "danger" : "warning"}>
+                  {isRunning ? "Running" : isReady ? "Ready" : isInstalling ? "Installing" : isError ? "Failed" : "Idle"}
                 </GlassBadge>
               </div>
 
@@ -150,14 +228,25 @@ export const InstanceDetailPage: React.FC = () => {
               Folder
             </GlassButton>
 
+            {isReady && (
+              <GlassButton
+                variant="secondary"
+                size="md"
+                disabled={isRunning || isInstalling || isPlayLoading}
+                onClick={handleReinstall}
+                title="Re-run the installer (fixes missing/corrupted files without losing your worlds)"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Reinstall
+              </GlassButton>
+            )}
+
             <GlassButton
               variant={isReady ? "primary" : "secondary"}
               size="md"
-              disabled={isRunning || isInstalling}
-              onClick={() => {
-                if (isReady) launchInstance(instance.id);
-                else installInstance(instance.id);
-              }}
+              disabled={isRunning || isInstalling || isPlayLoading}
+              isLoading={isPlayLoading}
+              onClick={handlePlayOrInstall}
               className="px-6"
             >
               {isInstalling ? (
@@ -172,6 +261,8 @@ export const InstanceDetailPage: React.FC = () => {
                   <Play className="h-4 w-4 fill-current mr-1.5" />
                   Play
                 </>
+              ) : isError ? (
+                "Retry Install"
               ) : (
                 "Install"
               )}
@@ -179,14 +270,31 @@ export const InstanceDetailPage: React.FC = () => {
           </div>
         </div>
 
+        {(actionError || persistedError) && (
+          <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-mono break-all">
+            {actionError || persistedError}
+          </div>
+        )}
+
         {/* Tab selector */}
         <div className="flex items-center gap-2 mt-6 pt-4 border-t border-white/10 text-xs">
           {[
             { id: "overview", label: "Overview", icon: Info },
+            ...(installedModpack
+              ? [
+                  {
+                    id: "modpack",
+                    label: "Modpack",
+                    icon: Package,
+                    badge: installedModpack.updateAvailable ? "Update" : undefined,
+                  },
+                ]
+              : []),
             { id: "mods", label: "Mods", icon: Puzzle, badge: "Soon" },
             { id: "settings", label: "Settings", icon: Settings },
             { id: "logs", label: "Logs", icon: Terminal },
           ].map((tab) => {
+
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
@@ -275,6 +383,157 @@ export const InstanceDetailPage: React.FC = () => {
         </div>
       )}
 
+      {/* Tab: Modpack */}
+      {activeTab === "modpack" && installedModpack && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <GlassCard interactive={false} className="p-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
+                    <Package className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      {installedModpack.modpackId}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Installed v{installedModpack.installedVersion} • Managed by CDN
+                    </p>
+                  </div>
+                </div>
+
+                {installedModpack.updateAvailable ? (
+                  <GlassBadge variant="warning" className="shadow-glow-sm animate-pulse">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    Update to v{installedModpack.latestKnownVersion || "Newer"}
+                  </GlassBadge>
+                ) : (
+                  <GlassBadge variant="success">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Up to Date
+                  </GlassBadge>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <GlassButton
+                  variant="secondary"
+                  size="sm"
+                  isLoading={isCheckingUpdate}
+                  onClick={checkModpackUpdate}
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5 text-amber-400" />
+                  Check for Updates
+                </GlassButton>
+
+                {installedModpack.updateAvailable && (
+                  <GlassButton
+                    variant="primary"
+                    size="sm"
+                    className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border-amber-500/40 shadow-glow-warning"
+                    onClick={() => setUpdateModalOpen(true)}
+                  >
+                    <ArrowUpCircle className="h-3.5 w-3.5 mr-1.5" />
+                    Update Now
+                  </GlassButton>
+                )}
+
+                <GlassButton
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setRepairModalOpen(true)}
+                >
+                  <Wrench className="h-3.5 w-3.5 mr-1.5 text-amber-400" />
+                  Verify & Repair Files
+                </GlassButton>
+
+                <GlassButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(`/modpacks/${installedModpack.modpackId}`)}
+                  className="text-blue-400 hover:text-blue-300"
+                >
+                  View in Modpack Catalog →
+                </GlassButton>
+              </div>
+
+              {/* Details and Strict Mode */}
+              <div className="pt-4 border-t border-white/10 space-y-3 text-xs">
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-slate-400">Remote Manifest URL</span>
+                  <span className="font-mono text-slate-300 truncate max-w-[300px]" title={installedModpack.manifestUrl}>
+                    {installedModpack.manifestUrl}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-slate-400">Installed Date</span>
+                  <span className="text-white">{formatDate(installedModpack.installedAt)}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-slate-400">Last Synced</span>
+                  <span className="text-white">{formatDate(installedModpack.lastUpdatedAt)}</span>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <div>
+                    <span className="text-white font-medium block">Strict Modpack Mode</span>
+                    <span className="text-[11px] text-slate-400">
+                      {installedModpack.strictMode
+                        ? "Enabled: Any custom mods added manually to mods/ will be removed on update."
+                        : "Disabled: Custom mods added to mods/ will be preserved during updates."}
+                    </span>
+                  </div>
+                  <GlassBadge variant={installedModpack.strictMode ? "warning" : "default"}>
+                    {installedModpack.strictMode ? "Strict" : "Flexible"}
+                  </GlassBadge>
+                </div>
+              </div>
+            </GlassCard>
+          </div>
+
+          {/* Right Column: Update History */}
+          <div className="space-y-6">
+            <GlassCard interactive={false} className="p-5 space-y-4">
+              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Update History
+              </h3>
+
+              {modpackHistory.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">
+                  No previous update records found for this instance.
+                </p>
+              ) : (
+                <div className="space-y-3 max-h-72 overflow-y-auto">
+                  {modpackHistory.map((rec) => (
+                    <div
+                      key={rec.id}
+                      className="p-3 rounded-xl bg-white/[0.03] border border-white/10 text-xs space-y-1"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-white">
+                          v{rec.fromVersion} → v{rec.toVersion}
+                        </span>
+                        <GlassBadge
+                          variant={rec.status === "Success" ? "success" : "danger"}
+                          size="sm"
+                        >
+                          {rec.status}
+                        </GlassBadge>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-slate-400">
+                        <span>{formatDate(rec.startedAt)}</span>
+                        <span>{formatBytes(rec.downloadSize)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
+          </div>
+        </div>
+      )}
+
       {/* Tab: Mods (Coming Soon) */}
       {activeTab === "mods" && (
         <GlassPanel variant="subtle" className="p-12 text-center space-y-4">
@@ -284,7 +543,7 @@ export const InstanceDetailPage: React.FC = () => {
           <div className="max-w-md mx-auto space-y-2">
             <h3 className="text-lg font-bold text-white">Mod Management — Coming Soon</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              In subsequent phases, you will be able to search and install mods and modpacks directly from Modrinth and CurseForge.
+              In subsequent phases, you will be able to search and install mods directly from Modrinth and CurseForge.
             </p>
             <p className="text-xs text-slate-500 bg-white/5 p-3 rounded-xl border border-white/10 font-mono">
               Architecture ready: ModProviderPort & ModLoaderInstallerPort are fully defined in the Rust core.
@@ -292,6 +551,7 @@ export const InstanceDetailPage: React.FC = () => {
           </div>
         </GlassPanel>
       )}
+
 
       {/* Tab: Settings */}
       {activeTab === "settings" && (
@@ -396,6 +656,31 @@ export const InstanceDetailPage: React.FC = () => {
             )}
           </div>
         </GlassCard>
+      )}
+
+      {/* Modpack Update & Repair Modals */}
+      {installedModpack && (
+        <>
+          <ModpackUpdateModal
+            isOpen={updateModalOpen}
+            onClose={() => setUpdateModalOpen(false)}
+            instanceId={instance.id}
+            targetVersion={installedModpack.latestKnownVersion}
+            onSuccess={() => {
+              modpacksApi.getInstalledForInstance(instance.id).then(setInstalledModpack);
+              modpacksApi.getHistory(instance.id).then(setModpackHistory);
+            }}
+          />
+
+          <ModpackRepairModal
+            isOpen={repairModalOpen}
+            onClose={() => setRepairModalOpen(false)}
+            instanceId={instance.id}
+            onSuccess={() => {
+              modpacksApi.getHistory(instance.id).then(setModpackHistory);
+            }}
+          />
+        </>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
-﻿pub mod entities;
+pub mod entities;
 pub mod value_objects;
 pub mod repositories;
 pub mod errors;
+pub mod modpacks;

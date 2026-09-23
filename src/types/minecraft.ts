@@ -20,3 +20,8 @@ export interface VersionFilter {
   showOldBeta: boolean;
   showOldAlpha: boolean;
 }
+
+export interface ForgeVersionOption {
+  version: string;
+  label: "recommended" | "latest";
+}

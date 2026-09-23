@@ -65,6 +65,3 @@ impl AuthenticationProviderPort for DevOfflineAuthenticationProvider {
         })
     }
 }
-
-// Architectural placeholder for future Microsoft OAuth2 + Xbox Live Auth
-pub struct MicrosoftAuthenticationProvider;

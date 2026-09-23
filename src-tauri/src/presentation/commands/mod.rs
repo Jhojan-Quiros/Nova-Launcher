@@ -4,6 +4,7 @@ pub mod java_commands;
 pub mod settings_commands;
 pub mod log_commands;
 pub mod auth_commands;
+pub mod modpacks_commands;
 
 pub use instance_commands::*;
 pub use minecraft_commands::*;
@@ -11,3 +12,4 @@ pub use java_commands::*;
 pub use settings_commands::*;
 pub use log_commands::*;
 pub use auth_commands::*;
+pub use modpacks_commands::*;
